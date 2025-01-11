@@ -1,5 +1,34 @@
----
-Version: Apps/V1
+# Deployment Configuration
+apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: 
+  name: lb-pod
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+        - name: java
+          image: sathish7164879/project:latest
+          imagePullPolicy: Always
+---
+
+# LoadBalancer Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: load
+spec:
+  type: LoadBalancer
+  selector:
+    app: java
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80

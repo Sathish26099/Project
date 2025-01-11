@@ -1,0 +1,90 @@
+pipeline {
+agent any
+ 
+ tools{
+     jdk 'jdk'
+     maven 'maven'
+     dockerTool 'Docker'
+ }
+ environment{
+     SCANNER_HOME= tool 'sonarqube'
+ }
+stages{
+    stage("Git Pull"){
+        steps{
+        git 'https://github.com/Sathish26099/Project/'
+    }
+}
+stage("maven compile"){
+ steps{
+     sh "mvn compile"
+ }
+}
+stage("maven test"){
+    steps{
+        sh "mvn test"
+    }
+}
+stage("trivy fs scan"){
+    steps{
+    sh "trivy fs --format table -o fs_report.html ."
+}
+}
+stage("Sonarqube Analysis"){
+    steps{
+    withSonarQubeEnv('sonar_server'){
+        sh '''$SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=MyProject -Dsonar.projectKey=Myproject -Dsonar.java.binaries=. '''
+    }
+}
+}
+stage("Quality_Gate"){
+    steps{
+        script{
+         waitForQualityGate abortPipeline: false, credentialsId: 'admin'  //admin it is my sonar admin token
+    }
+}
+}
+stage("Maven Build"){
+    steps{
+        sh "mvn package"
+    }
+}
+stage("Docker build"){
+    steps{
+         sh 'docker build -t myimg .'
+         sh 'docker tag myimg docker.io/sathish7164879/myproject:latest'
+         sh 'docker tag myimg docker.io/sathish7164879/myproject:${BUILD_NUMBER}'  //Using jenkins build variables
+    }
+}
+
+         
+         stage('Trivyimage'){
+        steps{
+            sh "trivy image --format table -o trivy-fs-report.html sathish7164879/test:latest "
+         
+         
+    }
+}
+stage("Docker Push"){
+    steps{
+          withCredentials([usernamePassword(credentialsId: 'docker_id', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+    // Login to Docker Hub with sudo -S to pass the password via stdin
+        sh 'echo "$DOCKER_PASSWORD" | sudo -S docker login -u "$DOCKER_USERNAME" --password-stdin'
+         sh 'docker push docker.io/sathish7164879/myproject:latest'
+         sh 'docker push docker.io/sathish7164879/myproject:${BUILD_NUMBER}'
+    }
+        }
+
+}
+
+ stage('deployement'){
+        steps{
+            withCredentials([file(credentialsId: 'con', variable: 'KUBECONFIG')]) {
+            sh 'kubectl apply -f /var/lib/jenkins/workspace/project1/pod.yaml --validate=false'
+            sh 'sudo kubectl rollout restart deployment load-pod'
+}
+
+}
+
+
+
